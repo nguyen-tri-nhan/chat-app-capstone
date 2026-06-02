@@ -94,9 +94,11 @@ export function useAGUI(useMock = false): UseAGUIReturn {
 
   const sendMessage = useCallback(async (text: string) => {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text };
+
+    // Show user message immediately before run starts
+    dispatch({ type: "USER_MESSAGE", content: text });
     dispatch({ type: "RUN_STARTED", run_id: crypto.randomUUID(), thread_id: threadIdRef.current ?? "" });
 
-    // Optimistically add user message (will be preserved across RUN_STARTED via reducer)
     const messages = [userMsg];
 
     if (useMock) {

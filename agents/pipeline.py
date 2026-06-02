@@ -150,6 +150,14 @@ async def run_pipeline(
     queue: asyncio.Queue,
 ):
     """Full research pipeline — pushes SSE strings to queue, ends with ("done", None)."""
+    import shutil
+    from agents.tools import WORKSPACE_BASE
+
+    # Clean workspace from previous run (avoid stale data bleeding in)
+    workspace = WORKSPACE_BASE / session_id
+    if workspace.exists():
+        shutil.rmtree(workspace)
+    workspace.mkdir(parents=True, exist_ok=True)
 
     # Inject context vars so tools work
     sid_token = _session_id.set(session_id)
@@ -186,15 +194,20 @@ async def run_pipeline(
             focus = "overview"
 
         # ── Phase 2: Parallel researchers ───────────────────────────────────
+        # Semaphore: max 5 concurrent LLM calls to avoid rate limiting
+        sem = asyncio.Semaphore(5)
+
         async def research_one(subject: str, index: int):
-            app = f"wr{index}_{session_id}"
-            agent = create_web_researcher_for(subject, index)
-            runner = InMemoryRunner(agent=agent, app_name=app)
-            await runner.session_service.create_session(
-                app_name=app, user_id="user", session_id=session_id
-            )
-            msg = f"Research: {subject}\nFocus: {focus}\nSave notes to research_notes/{subject.lower().replace(' ', '_')}.md"
-            await _run_agent(f"web_researcher_{index}", "research_pipeline", runner, session_id, msg, queue)
+            async with sem:
+                app = f"wr{index}_{session_id}"
+                agent = create_web_researcher_for(subject, index)
+                runner = InMemoryRunner(agent=agent, app_name=app)
+                await runner.session_service.create_session(
+                    app_name=app, user_id="user", session_id=session_id
+                )
+                slug = subject.lower().replace(" ", "_").replace("(", "").replace(")", "")
+                msg = f"Research: {subject}\nFocus: {focus}\nSave notes to research_notes/{slug}.md"
+                await _run_agent(f"web_researcher_{index}", "research_pipeline", runner, session_id, msg, queue)
 
         await asyncio.gather(*[research_one(s, i + 1) for i, s in enumerate(subjects)])
 

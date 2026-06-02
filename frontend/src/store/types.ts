@@ -12,7 +12,8 @@ export type AGUIEventType =
   | "TOOL_CALL_END"
   | "TOOL_CALL_RESULT"
   | "REASONING_MESSAGE_CHUNK"
-  | "CUSTOM";
+  | "CUSTOM"
+  | "USER_MESSAGE";
 
 interface BaseEvent {
   type: AGUIEventType;
@@ -86,7 +87,13 @@ export interface ReasoningMessageChunkEvent extends BaseEvent {
   delta?: string;
 }
 
+export interface UserMessageEvent extends BaseEvent {
+  type: "USER_MESSAGE";
+  content: string;
+}
+
 export type AGUIEvent =
+  | UserMessageEvent
   | RunStartedEvent
   | RunFinishedEvent
   | RunErrorEvent

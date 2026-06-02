@@ -3,13 +3,22 @@ import type { AGUIEvent, AppState } from "./types";
 
 export function reducer(state: AppState, event: AGUIEvent): AppState {
   switch (event.type) {
+    case "USER_MESSAGE":
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          { id: crypto.randomUUID(), role: "user" as const, content: event.content },
+        ],
+      };
+
     case "RUN_STARTED":
       return {
         ...initialState,
         status: "running",
         runId: event.run_id,
         threadId: event.thread_id,
-        messages: state.messages,
+        messages: state.messages, // preserves the user message just added
       };
 
     case "STEP_STARTED":
