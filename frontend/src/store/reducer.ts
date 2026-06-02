@@ -1,4 +1,5 @@
-import { AGUIEvent, AppState, initialState } from "./types";
+import { initialState } from "./types";
+import type { AGUIEvent, AppState } from "./types";
 
 export function reducer(state: AppState, event: AGUIEvent): AppState {
   switch (event.type) {

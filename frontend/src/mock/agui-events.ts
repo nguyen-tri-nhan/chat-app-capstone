@@ -1,4 +1,4 @@
-import { AGUIEvent } from "../store/types";
+import type { AGUIEvent } from "../store/types";
 
 // Pre-recorded AG-UI event sequence simulating a full Deep Analyst run.
 // Used for frontend development without a real backend.

@@ -53,22 +53,26 @@ async def run_agent(body: RunAgentInput):
     session = get_session(thread_id)
 
     if not session:
-        # Auto-create session if not found
+        import uuid
         runner = get_runner()
-        session = Session(id=thread_id or __import__("uuid").uuid4().__str__(), user_id="user")
+        session = Session(id=thread_id or str(uuid.uuid4()), user_id="user")
         await runner.session_service.create_session(
             app_name="deep_analyst", user_id=session.user_id, session_id=session.id
         )
 
-    # Extract latest user message
+    # Extract latest user message — content can be str or list of blocks
     message = ""
     if body.messages:
         for msg in reversed(body.messages):
             if msg.role == "user":
-                for block in (msg.content or []):
-                    if hasattr(block, "text"):
-                        message = block.text
-                        break
+                content = msg.content
+                if isinstance(content, str):
+                    message = content
+                elif isinstance(content, list):
+                    for block in content:
+                        if hasattr(block, "text"):
+                            message = block.text
+                            break
             if message:
                 break
 
