@@ -4,7 +4,8 @@ import { reducer } from "../store/reducer";
 import { initialState } from "../store/types";
 import type { AGUIEvent, AppState, ChatMessage } from "../store/types";
 
-const API_BASE = "http://localhost:8000";
+// Dev: localhost:8000 directly. Production (Docker): Nginx proxies /api/ to backend.
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 interface UseAGUIReturn {
   state: AppState;
@@ -25,7 +26,7 @@ export function useAGUI(useMock = false): UseAGUIReturn {
     }
   }, []);
 
-  const streamMock = useCallback(async (messages: ChatMessage[]) => {
+  const streamMock = useCallback(async (_messages: ChatMessage[]) => {
     for (const event of mockEvents) {
       await new Promise((r) => setTimeout(r, 150));
       dispatchEvent(event);

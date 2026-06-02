@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AgentNode, AppState } from "../store/types";
 
 function LiveStatus({ agents, status }: { agents: AgentNode[]; status: AppState["status"] }) {

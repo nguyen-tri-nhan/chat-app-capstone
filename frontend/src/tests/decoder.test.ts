@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { reducer } from "../store/reducer";
-import { AppState, initialState } from "../store/types";
+import { initialState } from "../store/types";
+import type { AppState } from "../store/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ describe("RUN_STARTED", () => {
   it("clears agents and error from previous run", () => {
     const prev: AppState = {
       ...initialState,
-      agents: [{ stepName: "old", status: "done", reasoning: "", response: "", toolCalls: [] }],
+      agents: [{ stepName: "old", parentStepName: null, status: "done", reasoning: "", response: "", toolCalls: [] }],
       error: "previous error",
     };
     const s = reducer(prev, RUN_STARTED);

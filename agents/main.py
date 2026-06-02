@@ -1,4 +1,5 @@
 import uuid
+from contextlib import asynccontextmanager
 
 from ag_ui.core import RunAgentInput
 from dotenv import load_dotenv
@@ -9,15 +10,27 @@ from pydantic import BaseModel
 
 from agents.tools import WORKSPACE_BASE
 from agui import run_and_stream, sse_response
+from logging_config import get_logger, setup_logging
 from session import Session, create_session, get_session, set_answer
 
 load_dotenv()
+setup_logging()
 
-app = FastAPI(title="Deep Analyst API")
+log = get_logger("api")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    log.info("Deep Analyst API started")
+    yield
+    log.info("Deep Analyst API shutting down")
+
+
+app = FastAPI(title="Deep Analyst API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,6 +44,7 @@ async def health():
 @app.post("/sessions")
 async def create_new_session() -> dict:
     session = create_session()
+    log.info("Session created: %s", session.id)
     return {"session_id": session.id}
 
 
@@ -43,6 +57,7 @@ async def run_agent(body: RunAgentInput):
         session = Session(id=thread_id or str(uuid.uuid4()), user_id="user")
         from session import _sessions
         _sessions[session.id] = session
+        log.info("Auto-created session: %s", session.id)
 
     # Extract latest user message
     message = ""
@@ -63,11 +78,8 @@ async def run_agent(body: RunAgentInput):
     if not message:
         raise HTTPException(status_code=400, detail="No user message found")
 
-    generator = run_and_stream(
-        session_id=session.id,
-        message=message,
-        run_id=body.run_id,
-    )
+    log.info("Run started — session=%s msg=%.80s", session.id, message)
+    generator = run_and_stream(session_id=session.id, message=message, run_id=body.run_id)
     return sse_response(generator)
 
 
@@ -77,6 +89,7 @@ class AnswerBody(BaseModel):
 
 @app.post("/answer/{session_id}")
 async def submit_answer(session_id: str, body: AnswerBody):
+    log.info("Answer received — session=%s ans=%.60s", session_id, body.answer)
     ok = set_answer(session_id, body.answer)
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -93,6 +106,7 @@ async def list_artifacts(session_id: str):
         for f in workspace.rglob("*")
         if f.is_file() and not f.name.startswith("_")
     )
+    log.info("Artifacts listed — session=%s count=%d", session_id, len(files))
     return {"files": files}
 
 
@@ -101,6 +115,7 @@ async def get_artifact(session_id: str, path: str):
     target = WORKSPACE_BASE / session_id / path
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
+    log.info("Artifact downloaded — session=%s path=%s", session_id, path)
     return PlainTextResponse(
         content=target.read_text(encoding="utf-8"),
         media_type="text/plain",

@@ -14,6 +14,10 @@ import time
 import uuid
 from typing import Any
 
+from logging_config import get_logger
+
+log = get_logger("pipeline")
+
 from ag_ui.core import (
     CustomEvent,
     EventType,
@@ -153,6 +157,8 @@ async def run_pipeline(
     import shutil
     from agents.tools import WORKSPACE_BASE
 
+    log.info("Pipeline starting — session=%s topic=%.80s", session_id, topic)
+
     # Clean workspace from previous run (avoid stale data bleeding in)
     workspace = WORKSPACE_BASE / session_id
     if workspace.exists():
@@ -173,6 +179,7 @@ async def run_pipeline(
         await _step_start(queue, "research_pipeline", parent=None)
 
         # ── Phase 1: Extract subjects ────────────────────────────────────────
+        log.info("[Phase 1] Extracting subjects")
         subjects: list[str] = []
         focus: str = ""
 
@@ -189,15 +196,17 @@ async def run_pipeline(
         await _run_agent("extractor", "research_pipeline", ext_runner, session_id, topic, queue)
 
         if not subjects:
-            # Fallback: parse topic directly
             subjects = [topic.strip()]
             focus = "overview"
 
+        log.info("[Phase 1] Subjects: %s | Focus: %s", subjects, focus)
+
         # ── Phase 2: Parallel researchers ───────────────────────────────────
-        # Semaphore: max 5 concurrent LLM calls to avoid rate limiting
+        log.info("[Phase 2] Launching %d researchers in parallel", len(subjects))
         sem = asyncio.Semaphore(5)
 
         async def research_one(subject: str, index: int):
+            log.info("[Phase 2] researcher_%d starting: %s", index, subject)
             async with sem:
                 app = f"wr{index}_{session_id}"
                 agent = create_web_researcher_for(subject, index)
@@ -210,8 +219,10 @@ async def run_pipeline(
                 await _run_agent(f"web_researcher_{index}", "research_pipeline", runner, session_id, msg, queue)
 
         await asyncio.gather(*[research_one(s, i + 1) for i, s in enumerate(subjects)])
+        log.info("[Phase 2] All researchers done")
 
         # ── Phase 3: Data analyst ────────────────────────────────────────────
+        log.info("[Phase 3] Data analyst starting")
         da_app = f"da_{session_id}"
         da = create_data_analyst()
         da_runner = InMemoryRunner(agent=da, app_name=da_app)
@@ -221,7 +232,10 @@ async def run_pipeline(
         await _run_agent("data_analyst", "research_pipeline", da_runner, session_id,
                          "Analyze all files in research_notes/ and write analysis/data_summary.md", queue)
 
+        log.info("[Phase 3] Data analyst done")
+
         # ── Phase 4: Report writer ───────────────────────────────────────────
+        log.info("[Phase 4] Report writer starting")
         rw_app = f"rw_{session_id}"
         rw = create_report_writer()
         rw_runner = InMemoryRunner(agent=rw, app_name=rw_app)
@@ -233,7 +247,9 @@ async def run_pipeline(
             "Read research_notes/ and analysis/data_summary.md. Write the final report to output/final_report.md", queue,
         )
 
+        log.info("[Phase 4] Report writer done")
         await _step_end(queue, "research_pipeline")
+        log.info("Pipeline complete — session=%s", session_id)
 
         await _emit(queue, RunFinishedEvent(
             type=EventType.RUN_FINISHED, run_id=run_id,
@@ -241,6 +257,7 @@ async def run_pipeline(
         ))
 
     except Exception as e:
+        log.error("Pipeline error — session=%s: %s", session_id, e, exc_info=True)
         await _emit(queue, RunErrorEvent(
             type=EventType.RUN_ERROR, message=str(e), timestamp=_now(),
         ))

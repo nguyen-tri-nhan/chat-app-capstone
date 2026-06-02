@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: ./agents
+    env_file: ./agents/.env
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
