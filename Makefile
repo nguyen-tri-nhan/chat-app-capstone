@@ -9,6 +9,7 @@ mock:
 
 test:
 	cd frontend && npm test
+	cd agents && uv run pytest -v
 
 install:
 	cd agents && uv sync
