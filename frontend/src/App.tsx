@@ -48,7 +48,7 @@ export default function App() {
         <div style={{ flex: 1, overflowY: "auto" }}>
           <TraceTree agents={state.agents} />
         </div>
-        <ArtifactPanel agents={state.agents} />
+        <ArtifactPanel artifacts={state.artifacts} />
       </div>
 
       {/* Interrupt overlay */}

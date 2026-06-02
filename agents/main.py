@@ -1,12 +1,15 @@
+import uuid
+
 from ag_ui.core import RunAgentInput
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from google.adk.runners import InMemoryRunner
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 
-from agents.lead_analyst import create_lead_analyst
+from agents.tools import WORKSPACE_BASE
 from agui import run_and_stream, sse_response
-from session import Session, create_session, get_session
+from session import Session, create_session, get_session, set_answer
 
 load_dotenv()
 
@@ -19,17 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# One shared runner per process (agents are stateless across sessions)
-_agent = create_lead_analyst()
-_runner: InMemoryRunner | None = None
-
-
-def get_runner() -> InMemoryRunner:
-    global _runner
-    if _runner is None:
-        _runner = InMemoryRunner(agent=_agent, app_name="deep_analyst")
-    return _runner
-
 
 @app.get("/health")
 async def health():
@@ -38,29 +30,21 @@ async def health():
 
 @app.post("/sessions")
 async def create_new_session() -> dict:
-    runner = get_runner()
     session = create_session()
-    await runner.session_service.create_session(
-        app_name="deep_analyst", user_id=session.user_id, session_id=session.id
-    )
     return {"session_id": session.id}
 
 
 @app.post("/runs")
 async def run_agent(body: RunAgentInput):
-    """AG-UI compatible endpoint — accepts RunAgentInput, streams AG-UI events."""
     thread_id = body.thread_id or ""
     session = get_session(thread_id)
 
     if not session:
-        import uuid
-        runner = get_runner()
         session = Session(id=thread_id or str(uuid.uuid4()), user_id="user")
-        await runner.session_service.create_session(
-            app_name="deep_analyst", user_id=session.user_id, session_id=session.id
-        )
+        from session import _sessions
+        _sessions[session.id] = session
 
-    # Extract latest user message — content can be str or list of blocks
+    # Extract latest user message
     message = ""
     if body.messages:
         for msg in reversed(body.messages):
@@ -79,12 +63,46 @@ async def run_agent(body: RunAgentInput):
     if not message:
         raise HTTPException(status_code=400, detail="No user message found")
 
-    runner = get_runner()
     generator = run_and_stream(
-        runner=runner,
         session_id=session.id,
-        user_id=session.user_id,
         message=message,
         run_id=body.run_id,
     )
     return sse_response(generator)
+
+
+class AnswerBody(BaseModel):
+    answer: str
+
+
+@app.post("/answer/{session_id}")
+async def submit_answer(session_id: str, body: AnswerBody):
+    ok = set_answer(session_id, body.answer)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
+@app.get("/artifacts/{session_id}")
+async def list_artifacts(session_id: str):
+    workspace = WORKSPACE_BASE / session_id
+    if not workspace.exists():
+        return {"files": []}
+    files = sorted(
+        str(f.relative_to(workspace))
+        for f in workspace.rglob("*")
+        if f.is_file() and not f.name.startswith("_")
+    )
+    return {"files": files}
+
+
+@app.get("/artifact/{session_id}/{path:path}")
+async def get_artifact(session_id: str, path: str):
+    target = WORKSPACE_BASE / session_id / path
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return PlainTextResponse(
+        content=target.read_text(encoding="utf-8"),
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{target.name}"'},
+    )

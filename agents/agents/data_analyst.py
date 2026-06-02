@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
-from google.adk.code_executors import BuiltInCodeExecutor
 
 from .shared import load_prompt, llm
+from .tools import list_files, read_file, write_file
 
 
 def create_data_analyst() -> LlmAgent:
@@ -9,5 +9,5 @@ def create_data_analyst() -> LlmAgent:
         model=llm(),
         name="data_analyst",
         instruction=load_prompt("data_analyst"),
-        code_executor=BuiltInCodeExecutor(),
+        tools=[read_file, list_files, write_file],
     )

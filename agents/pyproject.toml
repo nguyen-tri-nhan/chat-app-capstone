@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "ag-ui-protocol>=0.1.18",
+    "duckduckgo-search>=8.1.1",
     "fastapi>=0.128.8",
     "google-adk>=1.18.0",
     "litellm>=1.83.0",

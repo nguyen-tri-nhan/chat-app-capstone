@@ -11,7 +11,8 @@ export type AGUIEventType =
   | "TOOL_CALL_ARGS"
   | "TOOL_CALL_END"
   | "TOOL_CALL_RESULT"
-  | "REASONING_MESSAGE_CHUNK";
+  | "REASONING_MESSAGE_CHUNK"
+  | "CUSTOM";
 
 interface BaseEvent {
   type: AGUIEventType;
@@ -96,7 +97,14 @@ export type AGUIEvent =
   | ToolCallArgsEvent
   | ToolCallEndEvent
   | ToolCallResultEvent
-  | ReasoningMessageChunkEvent;
+  | ReasoningMessageChunkEvent
+  | CustomEvent;
+
+export interface CustomEvent extends BaseEvent {
+  type: "CUSTOM";
+  name: string;
+  value?: Record<string, unknown>;
+}
 
 // ─── Interrupt ────────────────────────────────────────────────────────────────
 
@@ -119,12 +127,13 @@ export interface ToolCall {
 }
 
 export interface AgentNode {
-  stepName: string;             // e.g. "web_researcher_1"
+  stepName: string;
+  parentStepName: string | null;  // null = root
   status: AgentStatus;
   startTime?: number;
   endTime?: number;
-  reasoning: string;            // accumulated thinking text
-  response: string;             // accumulated text response
+  reasoning: string;
+  response: string;
   toolCalls: ToolCall[];
 }
 
@@ -138,14 +147,27 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Artifact {
+  path: string;
+  content: string;
+  agentName: string;
+}
+
 export interface AppState {
   status: AppStatus;
   runId: string | null;
   threadId: string | null;
-  agents: AgentNode[];          // flat list, ordered by appearance
+  agents: AgentNode[];
+  activeStepName: string | null;
   messages: ChatMessage[];
+  artifacts: Artifact[];
   interrupt: Interrupt | null;
   error: string | null;
+}
+
+// Derive nested children from flat list
+export function childrenOf(agents: AgentNode[], parentStepName: string | null): AgentNode[] {
+  return agents.filter((a) => a.parentStepName === parentStepName);
 }
 
 export const initialState: AppState = {
@@ -153,7 +175,9 @@ export const initialState: AppState = {
   runId: null,
   threadId: null,
   agents: [],
+  activeStepName: null,
   messages: [],
+  artifacts: [],
   interrupt: null,
   error: null,
 };

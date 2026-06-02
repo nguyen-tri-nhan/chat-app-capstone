@@ -116,12 +116,14 @@ export function useAGUI(useMock = false): UseAGUIReturn {
       pendingAnswerRef.current = answer;
       return;
     }
-    // For real backend: send resume as a new run
-    const interruptId = interruptIdRef.current;
-    if (!interruptId || !threadIdRef.current) return;
-    const resumeMessages: ChatMessage[] = [{ id: crypto.randomUUID(), role: "user", content: answer }];
-    streamReal(resumeMessages, crypto.randomUUID());
-  }, [useMock, streamReal]);
+    const sessionId = threadIdRef.current;
+    if (!sessionId) return;
+    fetch(`${API_BASE}/answer/${sessionId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    }).catch(console.error);
+  }, [useMock]);
 
   return { state, sendMessage, submitAnswer };
 }
