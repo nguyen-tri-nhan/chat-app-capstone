@@ -4,6 +4,98 @@ A chat application that gives users full transparency into what AI agents are do
 
 ---
 
+## Design
+
+### Tech Stack
+
+| Layer | Technology | Role |
+|-------|-----------|------|
+| Agent Framework | Google ADK | Agent lifecycle, tool execution |
+| LLM Provider | OpenCode Zen via LiteLLM | Free model access (OpenAI-compatible) |
+| Agent–UI Protocol | AG-UI | Standardised SSE event stream |
+| Backend | FastAPI + Python 3.12 | Pipeline orchestration, SSE endpoint |
+| Frontend | React + TypeScript (Vite) | Chat UI, trace tree, artifacts |
+| Containerisation | Docker + Nginx | Production deployment |
+| CI | GitHub Actions | pytest + vitest on every push |
+
+### System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        Chat
+        TraceTree["Trace Tree"]
+        Artifacts
+    end
+
+    subgraph FastAPI
+        API["/runs /answer /artifacts"]
+        Pipeline["Pipeline\norchestrator"]
+    end
+
+    subgraph Agents["ADK Agents"]
+        EX["extractor"]
+        WR["web_researcher ×N\n⚡ parallel"]
+        DA["data_analyst"]
+        RW["report_writer"]
+    end
+
+    Browser -->|"AG-UI SSE"| API
+    API --> Pipeline
+    Pipeline --> EX --> WR --> DA --> RW
+    Agents -->|"AG-UI events"| API
+    Agents --> LLM["OpenCode Zen"]
+```
+
+### Key Flows
+
+**Research run**
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant E as extractor
+    participant W as web_researcher ×N
+    participant D as data_analyst
+    participant R as report_writer
+
+    U->>E: topic
+    alt ambiguous
+        E-->>U: ask_user
+        U->>E: answer
+    end
+    E->>E: submit_subjects([...])
+    par parallel
+        E->>W: researcher_1
+    and
+        E->>W: researcher_2
+    and
+        E->>W: researcher_N
+    end
+    W->>D: all done
+    D->>R: analysis ready
+    R-->>U: 📄 artifact
+```
+
+**ask_user flow**
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant BE as Backend
+    participant AG as Agent (tool)
+
+    AG->>BE: ask_user("question") → queue
+    BE->>FE: SSE: CUSTOM/ASK_USER
+    Note over FE: overlay shown, stream stays open
+    FE->>BE: POST /answer/:id
+    BE->>AG: asyncio.Event.set()
+    AG->>AG: tool returns answer, continues
+    BE->>FE: SSE: events resume
+```
+
+---
+
 ## Architecture
 
 ```
