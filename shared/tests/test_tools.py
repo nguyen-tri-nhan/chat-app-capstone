@@ -2,13 +2,13 @@
 
 import pytest
 
-from agents.tools import _session_id, list_files, read_file, write_file
+from deep_analyst_shared.tools import _session_id, list_files, read_file, write_file
 
 
 @pytest.fixture(autouse=True)
 def set_session(tmp_path, monkeypatch):
     """Each test gets an isolated workspace in a temp dir."""
-    import agents.tools as t
+    import deep_analyst_shared.tools as t
     monkeypatch.setattr(t, "WORKSPACE_BASE", tmp_path)
     token = _session_id.set("test-session")
     yield

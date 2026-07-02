@@ -10,12 +10,12 @@ COPY shared/ shared/
 COPY agents/ agents/
 COPY agents_langgraph/ agents_langgraph/
 
-RUN uv sync --frozen --no-dev --package agents
+RUN uv sync --frozen --no-dev --package agents-langgraph
 
 # Run the pre-built venv's binaries directly, not via `uv run` — `uv run` re-checks/reconciles
 # the environment on every invocation, which would pull dev deps back in at container start
 # despite the --no-dev build above (confirmed empirically: adds ~6 packages on first `uv run`).
 ENV PATH="/app/.venv/bin:$PATH"
-WORKDIR /app/agents
+WORKDIR /app/agents_langgraph
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

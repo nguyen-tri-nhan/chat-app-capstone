@@ -1,7 +1,23 @@
 services:
+  # Both backends build from the repo root (a uv workspace) since they depend on the shared/
+  # workspace member (shared/) for tools.py/session.py/prompts — see shared/README.md.
   backend:
-    build: ./agents
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
     env_file: ./agents/.env
+    restart: unless-stopped
+
+  # LangGraph engine — feature-parity alternative to `backend` (Google ADK), for comparison.
+  # Not routed through nginx by default; reachable directly at localhost:8001.
+  # See README.md "Backend engines" section for how to switch the frontend between the two.
+  backend-langgraph:
+    build:
+      context: .
+      dockerfile: agents_langgraph/Dockerfile
+    env_file: ./agents_langgraph/.env
+    ports:
+      - "8001:8000"
     restart: unless-stopped
 
   frontend:

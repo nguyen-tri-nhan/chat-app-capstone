@@ -2,12 +2,18 @@
 
 .vscode/
 
-# Python
+# Python — single uv workspace venv/lock live at the repo root (agents/, agents_langgraph/,
+# shared/ are workspace members); per-member .venv/ entries are a safety net in case one gets
+# created outside the workspace flow.
+.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
 agents/.venv/
-agents/__pycache__/
-agents/**/__pycache__/
-agents/**/*.pyc
 agents/.env
+agents_langgraph/.venv/
+agents_langgraph/.env
+shared/.venv/
 
 # Frontend
 frontend/node_modules/

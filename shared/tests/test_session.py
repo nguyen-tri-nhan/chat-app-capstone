@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from session import Session, _sessions, create_session, get_session, set_answer
+from deep_analyst_shared.session import Session, _sessions, create_session, get_session, set_answer
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +41,7 @@ def test_multiple_sessions_independent():
 
 @pytest.mark.asyncio
 async def test_set_answer_unblocks_get_answer():
-    from session import get_answer
+    from deep_analyst_shared.session import get_answer
     s = create_session()
 
     async def answer_after_delay():

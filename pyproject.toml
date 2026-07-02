@@ -1,0 +1,12 @@
+[project]
+name = "chat-app-capstone"
+version = "0.1.0"
+description = "Deep Analyst — workspace root for the Python backends (agents/, agents_langgraph/, shared/). See README.md for the frontend and overall project."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["agents", "agents_langgraph", "shared"]

@@ -1,0 +1,19 @@
+[project]
+name = "deep-analyst-shared"
+version = "0.1.0"
+description = "Framework-agnostic pieces shared by agents/ (Google ADK) and agents_langgraph/ (LangGraph): file tools, session store, prompts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

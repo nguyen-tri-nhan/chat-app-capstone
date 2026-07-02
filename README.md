@@ -222,6 +222,62 @@ make fe      # frontend → http://localhost:5173
 
 ---
 
+## Backend engines
+
+Two independent, feature-parity backend implementations of the same 4-phase pipeline exist,
+for comparison:
+
+| Engine | Directory | Port | Framework |
+|--------|-----------|------|-----------|
+| Google ADK (default) | `agents/` | 8000 | `google-adk` |
+| LangGraph | `agents_langgraph/` | 8001 | `langgraph` + `langchain-openai` |
+
+Both emit the identical AG-UI SSE event stream, so the frontend works unmodified against
+either. They also share one implementation of the framework-agnostic pieces — file tools,
+the in-memory session store, and system prompts — via a third workspace member,
+[`shared/`](shared/README.md), instead of keeping two copies in sync by hand. See
+"Python workspace" below for how the three tie together. There's no in-app toggle for engine
+selection — switching is done via config:
+
+```bash
+# Local dev — run whichever engine(s) you want, then point the frontend at one:
+make be              # ADK        → :8000
+make be-langgraph    # LangGraph  → :8001
+cd frontend && VITE_API_BASE=http://localhost:8001 npm run dev   # or :8000
+```
+
+In Docker, both containers can run side by side (`backend` and `backend-langgraph`), but
+`frontend`'s nginx only proxies `/api/` to `backend` by default. To test the LangGraph engine
+through Docker, hit `http://localhost:8001` directly, or stop `backend` and manually alias
+`backend-langgraph` to the `backend` network name (advanced — see
+[`agents_langgraph/README.md`](agents_langgraph/README.md) for caveats, including a DNS
+round-robin footgun if both containers share that alias at once).
+
+See [`agents_langgraph/README.md`](agents_langgraph/README.md) for its known limitations
+(inherited `ask_user` interrupt handling gap, reasoning-content availability).
+
+### Python workspace
+
+`agents/`, `agents_langgraph/`, and `shared/` are members of one [uv
+workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) (root `pyproject.toml` +
+one `uv.lock`), not three independent Python projects:
+
+- `shared/` owns `tools.py`, `session.py`, and `prompts/*.md` — the parts with no framework
+  coupling. Both engines depend on it (`deep-analyst-shared` in `[tool.uv.sources]`) and each
+  keeps a thin local re-export shim at the old import paths (`agents/session.py`,
+  `agents/agents/tools.py`, etc.), so a bug fix or prompt change only needs to happen once.
+- `agents/` and `agents_langgraph/` still own everything framework-specific (the ADK/LangGraph
+  agent construction, the LLM client, `pipeline.py`, `main.py`).
+- `uv sync --all-packages` (what `make install` runs) installs all three members into one
+  shared `.venv` at the repo root. `uv run`/`uv sync` use nearest-project discovery, so
+  `cd agents && uv run uvicorn ...` still only needs `agents/`'s own dependencies active —
+  `make be`/`make be-langgraph` are unchanged from before the workspace existed.
+- Docker images stay lean despite the shared `.venv`: each `Dockerfile` runs `uv sync --package
+  agents` (or `agents-langgraph`), which installs only that member's own dependencies plus
+  `deep-analyst-shared` — `google-adk` never lands in the LangGraph image and vice versa.
+
+---
+
 ## Docker
 
 ```bash
@@ -233,15 +289,16 @@ App available at `http://localhost`.
 
 Logs:
 ```bash
-docker compose logs -f           # all
-docker compose logs -f backend   # backend only
+docker compose logs -f                     # all
+docker compose logs -f backend             # ADK backend only
+docker compose logs -f backend-langgraph   # LangGraph backend only
 ```
 
 ---
 
 ## Environment Variables
 
-`agents/.env`:
+`agents/.env` (and `agents_langgraph/.env`, same shape):
 
 ```env
 LLM_BASE_URL=https://opencode.ai/zen/v1/
@@ -250,6 +307,11 @@ LLM_API_KEY=your_key_here
 ```
 
 Available free models on OpenCode Zen: `deepseek-v4-flash-free`, `big-pickle`, `mimo-v2.5-free`, `nemotron-3-super-free`
+
+`shared/tools.py` also reads `WORKSPACE_BASE` (default `/tmp/deep-analyst`) — the directory
+research artifacts get written to. `agents_langgraph/.env.example` overrides it to
+`/tmp/deep-analyst-langgraph` so both engines can run side by side locally without artifacts
+from one run colliding with the other's.
 
 ---
 
@@ -270,22 +332,36 @@ Available free models on OpenCode Zen: `deepseek-v4-flash-free`, `big-pickle`, `
 
 ```
 chat-app-capstone/
+├── pyproject.toml           # uv workspace root (agents/, agents_langgraph/, shared/)
+├── uv.lock
 ├── Makefile
 ├── docker-compose.yml
+├── shared/                  # deep-analyst-shared — framework-agnostic, used by both engines
+│   └── src/deep_analyst_shared/
+│       ├── tools.py           # write_file, read_file, list_files, ask_user
+│       ├── session.py          # In-memory session store
+│       └── prompts/            # System prompts (Markdown), single source of truth
 ├── agents/
 │   ├── main.py              # FastAPI app, endpoints, logging
 │   ├── pipeline.py          # Custom async pipeline orchestrator
 │   ├── agui.py              # AG-UI SSE bridge
-│   ├── session.py           # In-memory session store
+│   ├── session.py           # Re-exports deep_analyst_shared.session
 │   ├── logging_config.py    # Logging setup
 │   ├── agents/
 │   │   ├── extractor.py     # Extracts research subjects
 │   │   ├── web_researcher.py # Web search + file write (parallel ×N)
 │   │   ├── data_analyst.py  # Reads notes, writes analysis
 │   │   ├── report_writer.py # Writes final report
-│   │   ├── tools.py         # Shared tools: web_search, write_file, ask_user
-│   │   └── shared.py        # LLM config + prompt loader
-│   ├── prompts/             # System prompts (Markdown)
+│   │   ├── tools.py         # Re-exports deep_analyst_shared.tools
+│   │   └── shared.py        # LLM config; re-exports deep_analyst_shared.prompts.load_prompt
+│   ├── Dockerfile
+│   └── .env.example
+├── agents_langgraph/        # LangGraph engine — mirrors agents/ 1:1, see its README
+│   ├── main.py
+│   ├── pipeline.py          # LangGraph StateGraph + Send() fan-out
+│   ├── agui.py
+│   ├── session.py           # Re-exports deep_analyst_shared.session
+│   ├── agents/              # extractor · web_researcher · data_analyst · report_writer
 │   ├── Dockerfile
 │   └── .env.example
 └── frontend/
@@ -305,7 +381,7 @@ chat-app-capstone/
 ## Testing
 
 ```bash
-make test    # run frontend decoder unit tests (14 tests)
+make test    # frontend decoder tests + both backends' endpoint/tool tests
 ```
 
 Frontend can also run in mock mode (no backend needed):

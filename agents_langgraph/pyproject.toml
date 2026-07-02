@@ -1,16 +1,17 @@
 [project]
-name = "agents"
+name = "agents-langgraph"
 version = "0.1.0"
-description = "Add your description here"
+description = "Deep Analyst backend — LangGraph engine (mirrors agents/, Google ADK engine)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "ag-ui-protocol>=0.1.18",
     "deep-analyst-shared",
-    "duckduckgo-search>=8.1.1",
     "fastapi>=0.128.8",
-    "google-adk>=1.18.0",
-    "litellm>=1.83.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "python-dotenv>=1.0.0",
     "uvicorn>=0.39.0",
 ]
 

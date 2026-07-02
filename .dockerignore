@@ -1,0 +1,15 @@
+.git
+.github
+
+frontend/node_modules
+frontend/dist
+
+agents/.venv
+agents_langgraph/.venv
+shared/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+
+agents/.env
+agents_langgraph/.env
